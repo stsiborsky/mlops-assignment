@@ -28,7 +28,9 @@ rsync -avz \
     -e "ssh -i ${SSH_KEY_PATH} -o StrictHostKeyChecking=no" \
     --include="data/" \
     --include="data/**" \
+    --include="evals" \
     --include="evals/eval_set.jsonl" \
+    --include="load_test/"
     --include="load_test/perf_pool.jsonl" \
     --exclude="*" \
     "${VM_USER}@${VM_IP}:${REMOTE_DIR}/" ./

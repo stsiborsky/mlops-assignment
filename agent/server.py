@@ -60,7 +60,10 @@ def answer(req: AnswerRequest) -> AnswerResponse:
         "metadata": req.tags,
     }
     try:
-        final = graph.invoke(state, config=config)
+        from langfuse import propagate_attributes
+        formatted_tags = [f"{k}:{v}" for k, v in req.tags.items()]
+        with propagate_attributes(tags=formatted_tags):
+            final = graph.invoke(state, config=config)
     except Exception as e:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}")
 

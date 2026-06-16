@@ -32,7 +32,6 @@ rsync -avz \
     --exclude ".git" \
     --exclude ".idea" \
     --exclude ".vscode" \
-    --exclude ".env" \
     ./ "${VM_USER}@${VM_IP}:${REMOTE_DIR}/"
 
 if [ $? -eq 0 ]; then
