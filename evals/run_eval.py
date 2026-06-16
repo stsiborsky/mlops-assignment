@@ -58,19 +58,92 @@ def matches(gold_rows: list[tuple] | None, pred_rows: list[tuple] | None) -> boo
 
 def eval_one(question: dict, agent_url: str) -> dict:
     """Score one question. Return a dict capturing per-iteration correctness."""
-    raise NotImplementedError("Phase 5")
+    db_id = question["db_id"]
+    # In eval_set.jsonl produced by scripts/load_data.py, the key is 'gold_sql'
+    gold_sql = question.get("gold_sql") or question.get("SQL") or question.get("sql") or question.get("evidence")
+
+    if not gold_sql:
+        return {
+            "question": question["question"],
+            "db_id": db_id,
+            "error": "Missing gold_sql in eval set",
+            "iterations": [],
+        }
+
+    _, gold_rows, _ = run_sql(db_id, gold_sql)
+
+    try:
+        resp = httpx.post(agent_url, json={
+            "question": question["question"],
+            "db": db_id,
+        }, timeout=60.0)
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as e:
+        return {
+            "question": question["question"],
+            "db_id": db_id,
+            "error": str(e),
+            "iterations": [],
+        }
+
+    # The agent server returns history: list[dict[str, Any]]
+    # Each entry in history looks like {"node": "generate_sql" or "revise", "sql": "..."}
+    # We need to score each SQL attempt found in the history.
+    attempts = [h["sql"] for h in data.get("history", []) if h.get("sql")]
+
+    # If the agent crashed or returned early without history but has a final sql
+    if not attempts and data.get("sql"):
+        attempts = [data["sql"]]
+
+    iteration_results = []
+    for sql in attempts:
+        ok, pred_rows, err = run_sql(db_id, sql)
+        is_correct = matches(gold_rows, pred_rows) if ok else False
+        iteration_results.append({
+            "sql": sql,
+            "ok": ok,
+            "correct": is_correct,
+            "error": err,
+        })
+
+    return {
+        "question": question["question"],
+        "db_id": db_id,
+        "gold_sql": gold_sql,
+        "iterations": iteration_results,
+    }
 
 
 def summarize(results: list[dict]) -> dict:
-    """Aggregate per-question results.
+    """Aggregate per-question results."""
+    if not results:
+        return {"count": 0, "accuracy": 0.0}
 
-    Per-iteration carry-forward: if the agent terminated at iteration j < k
-    (verify said ok at j, or it hit MAX_ITERATIONS at j < k), treat the
-    question's iteration-k result as identical to its iteration-j result.
-    The agent stopped emitting; whatever it had at termination is what
-    would have been served had we polled at iteration k.
-    """
-    raise NotImplementedError("Phase 5")
+    # We want to know accuracy at iteration 1, 2, ..., MAX_ITERATIONS
+    # Max iterations in graph.py is 3.
+    max_k = 0
+    for r in results:
+        max_k = max(max_k, len(r.get("iterations", [])))
+
+    if max_k == 0:
+        return {"count": len(results), "error": "No iterations found"}
+
+    stats = {}
+    for k in range(1, max_k + 1):
+        correct_count = 0
+        for r in results:
+            iters = r.get("iterations", [])
+            if not iters:
+                continue
+            # "Carry forward": if agent stopped at j < k, use result at j.
+            idx = min(k - 1, len(iters) - 1)
+            if iters[idx]["correct"]:
+                correct_count += 1
+        stats[f"acc_at_iter_{k}"] = correct_count / len(results)
+
+    stats["count"] = len(results)
+    return stats
 
 
 # ---------- Main (provided) --------------------------------------------
