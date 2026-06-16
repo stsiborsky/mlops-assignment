@@ -17,27 +17,25 @@ fi
 # Set default remote directory if not provided
 REMOTE_DIR=${REMOTE_DIR:-"~/mlops"}
 
-echo "Syncing local files to ${VM_USER}@${VM_IP}:${REMOTE_DIR}..."
+echo "Pulling data from ${VM_USER}@${VM_IP}:${REMOTE_DIR}..."
 
-# Perform rsync
-# -a: archive mode (preserves permissions, symlinks, etc.)
+# Perform rsync (pull)
+# -a: archive mode
 # -v: verbose
-# -z: compress during transfer
-# --delete: delete files on remote that are deleted locally (use with caution!)
-# -e: specify the remote shell (to use the SSH key)
+# -z: compress
+# -e: specify ssh
 rsync -avz \
     -e "ssh -i ${SSH_KEY_PATH} -o StrictHostKeyChecking=no" \
-    --exclude ".venv" \
-    --exclude "__pycache__" \
-    --exclude ".git" \
-    --exclude ".idea" \
-    --exclude ".vscode" \
-    --exclude ".env" \
-    ./ "${VM_USER}@${VM_IP}:${REMOTE_DIR}/"
+    --include="data/" \
+    --include="data/**" \
+    --include="evals/eval_set.jsonl" \
+    --include="load_test/perf_pool.jsonl" \
+    --exclude="*" \
+    "${VM_USER}@${VM_IP}:${REMOTE_DIR}/" ./
 
 if [ $? -eq 0 ]; then
-    echo "Success: Sync complete."
+    echo "Success: Data pull complete."
 else
-    echo "Error: Sync failed."
+    echo "Error: Data pull failed."
     exit 1
 fi
