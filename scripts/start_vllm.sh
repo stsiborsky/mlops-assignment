@@ -12,4 +12,5 @@ exec uv run python -m vllm.entrypoints.openai.api_server \
     --host 0.0.0.0 \
     --port 8000 \
     --max-model-len 32768 \
-    --gpu-memory-utilization 0.95
+    --gpu-memory-utilization 0.95 \
+    --max-num-seqs 512

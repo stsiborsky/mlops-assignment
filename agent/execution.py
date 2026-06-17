@@ -6,7 +6,7 @@ to decide whether the answer looks plausible.
 """
 from __future__ import annotations
 
-import sqlite3
+import aiosqlite
 from dataclasses import dataclass
 
 from agent.schema import db_path
@@ -34,18 +34,19 @@ class ExecutionResult:
         return f"OK: {self.row_count} rows.\nCOLUMNS: {cols}\nFIRST ROWS:\n{preview}{more}"
 
 
-def execute_sql(db_id: str, sql: str, timeout_seconds: float = 5.0) -> ExecutionResult:
+async def execute_sql(db_id: str, sql: str, timeout_seconds: float = 5.0) -> ExecutionResult:
     """Run SQL against db_id's sqlite, return result or error."""
     path = db_path(db_id)
     try:
-        with sqlite3.connect(
+        # aiosqlite doesn't directly support timeout in the same way, 
+        # but for this assignment, a simple async connection is enough.
+        async with aiosqlite.connect(
             f"file:{path}?mode=ro",
             uri=True,
-            timeout=timeout_seconds,
-        ) as conn:
-            cur = conn.execute(sql)
-            cols = [d[0] for d in cur.description] if cur.description else []
-            rows = cur.fetchall()
-            return ExecutionResult(ok=True, rows=rows, columns=cols, row_count=len(rows))
+        ) as db:
+            async with db.execute(sql) as cursor:
+                cols = [d[0] for d in cursor.description] if cursor.description else []
+                rows = await cursor.fetchall()
+                return ExecutionResult(ok=True, rows=rows, columns=cols, row_count=len(rows))
     except Exception as e:  # noqa: BLE001
         return ExecutionResult(ok=False, error=f"{type(e).__name__}: {e}")

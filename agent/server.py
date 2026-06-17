@@ -55,7 +55,7 @@ def health() -> dict[str, str]:
 
 
 @app.post("/answer", response_model=AnswerResponse)
-def answer(req: AnswerRequest) -> AnswerResponse:
+async def answer(req: AnswerRequest) -> AnswerResponse:
     state = AgentState(question=req.question, db_id=req.db)
     config: dict[str, Any] = {
         "callbacks": [_lf_handler] if _lf_handler is not None else [],
@@ -65,7 +65,7 @@ def answer(req: AnswerRequest) -> AnswerResponse:
         from langfuse import propagate_attributes
         formatted_tags = [f"{k}:{v}" for k, v in req.tags.items()]
         with propagate_attributes(tags=formatted_tags):
-            final = graph.invoke(state, config=config)
+            final = await graph.ainvoke(state, config=config)
     except Exception as e:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}")
 
