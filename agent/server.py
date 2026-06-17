@@ -14,6 +14,7 @@ from typing import Any
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+from prometheus_fastapi_instrumentator import Instrumentator
 
 load_dotenv()
 
@@ -30,6 +31,7 @@ if os.environ.get("LANGFUSE_PUBLIC_KEY") and os.environ.get("LANGFUSE_SECRET_KEY
 
 
 app = FastAPI()
+Instrumentator().instrument(app).expose(app)
 
 
 class AnswerRequest(BaseModel):

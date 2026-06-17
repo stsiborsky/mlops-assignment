@@ -1,0 +1,62 @@
+{
+  "title": "Agent Metrics",
+  "uid": "agent-metrics",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "tags": ["agent", "assignment"],
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Request Rate (RPS)",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+      "datasource": { "uid": "prometheus" },
+      "targets": [
+        { "expr": "sum(rate(http_requests_total{job=\"agent\"}[1m]))", "legendFormat": "total requests" }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Total Request Count",
+      "gridPos": { "h": 8, "w": 4, "x": 8, "y": 0 },
+      "datasource": { "uid": "prometheus" },
+      "targets": [
+        { "expr": "sum(http_requests_total{job=\"agent\"})", "legendFormat": "total" }
+      ],
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "mappings": [] } }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "HTTP Status Codes",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "uid": "prometheus" },
+      "targets": [
+        { "expr": "sum by (status) (rate(http_requests_total{job=\"agent\"}[1m]))", "legendFormat": "{{status}}" }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Latency (s)",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 8 },
+      "datasource": { "uid": "prometheus" },
+      "targets": [
+        { "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_highr_seconds_bucket{job=\"agent\"}[5m])))", "legendFormat": "P99" },
+        { "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_highr_seconds_bucket{job=\"agent\"}[5m])))", "legendFormat": "P95" },
+        { "expr": "histogram_quantile(0.50, sum by (le) (rate(http_request_duration_highr_seconds_bucket{job=\"agent\"}[5m])))", "legendFormat": "P50" },
+        { "expr": "sum(rate(http_request_duration_highr_seconds_sum{job=\"agent\"}[5m])) / sum(rate(http_request_duration_highr_seconds_count{job=\"agent\"}[5m]))", "legendFormat": "Mean" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "last", "max"] } }
+    }
+  ]
+}
