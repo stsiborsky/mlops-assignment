@@ -8,16 +8,35 @@ design alongside their nodes - pick whatever placeholders your nodes pass in.
 Filling these in is part of Phase 3.
 """
 
-GENERATE_SQL_SYSTEM = """You are an expert SQL assistant. Your task is to convert English to SQLite.
-Precision is key:
-1. **Select only the specific columns requested.** If the user asks for "names", do not return IDs or other metadata.
-2. **Use DISTINCT** whenever you are listing entities from a table that is joined with a related records table (e.g., listing unique circuits that have had races).
-3. **Use valid SQLite syntax.**
+GENERATE_SQL_SYSTEM = """You are an expert SQLite SQL writer. Output ONE SELECT that returns
+exactly what the question asks for — no extra columns, no extra rows.
 
-Return ONLY the SQL code, wrapped in a markdown code block:
-```sql
-SELECT ...
-```"""
+Schema comments (`-- ...`) are AUTHORITATIVE:
+  • Value codes (`F: female; M: male`, `+ carcinogenic, - not`, `cl: chlorine`):
+    use the CODE in filters (`SEX='F'`, `label='+'`, `element='cl'`), not the word.
+  • Normal ranges (`Normal range: 900 < N < 2000`): copy bounds verbatim.
+    Sex-dependent ranges → branch on SEX with OR/CASE.
+  • For "normal X", prefer a column whose comment has a Normal range over a
+    similarly-named one that doesn't.
+
+Rules:
+  1. Use the simplest query that works.
+  2. SELECT exactly the columns the question lists, in that order
+     ("Street, City, State, Zip" → not "Street, City, Zip, State").
+  3. Yes/no or categorical questions return a label via IIF/CASE, not raw rows.
+     Mind IIF orientation and use the question's wording for labels.
+  4. "Difference between A and B" = A − B, in that order.
+  5. "Which of A or B has higher X" returns the IDENTIFIER of the winner,
+     aggregating X per entity (SUM/AVG, ORDER BY DESC, LIMIT 1).
+  6. "Finishers" / "patients with symptoms" / "X has Y" implies Y IS NOT NULL.
+  7. Add DISTINCT only when a JOIN can multiply rows of the listed entity;
+     don't add DISTINCT otherwise.
+  8. Datetime literals include trailing `.0`: `'2010-07-19 19:39:08.0'`.
+  9. Parse `m:ss.fff` time strings with SUBSTR+INSTR on `:` and `.`, never REPLACE.
+  10. Prefer simple JOINs over nested SELECTs
+  11. Single line only — no `\n`, no line breaks inside the SQL.
+
+Return ONLY the SQL on a single line in a ```sql ... ``` block."""
 
 # Available placeholders: {schema}, {question}
 GENERATE_SQL_USER = """Schema:

@@ -8,6 +8,7 @@ agent's final SQL, the result rows, and per-iteration history.
 """
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any
 
@@ -19,6 +20,8 @@ from prometheus_fastapi_instrumentator import Instrumentator
 load_dotenv()
 
 from agent.graph import AgentState, graph  # noqa: E402
+
+logger = logging.getLogger(__name__)
 
 # Langfuse callback handler. If keys are set we initialize it; failures
 # are NOT swallowed - a misconfigured Langfuse should not silently
@@ -67,6 +70,7 @@ async def answer(req: AnswerRequest) -> AnswerResponse:
         with propagate_attributes(tags=formatted_tags):
             final = await graph.ainvoke(state, config=config)
     except Exception as e:  # noqa: BLE001
+        logger.exception("graph.ainvoke failed for question=%r db=%s", req.question, req.db)
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}")
 
     sql = final.get("sql", "")

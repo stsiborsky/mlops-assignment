@@ -17,6 +17,7 @@ conditional router following the same shape.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from dataclasses import dataclass, field
@@ -29,6 +30,8 @@ from langgraph.graph import END, START, StateGraph
 from agent import prompts
 from agent.execution import ExecutionResult, execute_sql
 from agent.schema import render_schema
+
+logger = logging.getLogger(__name__)
 
 # Total generate + revise calls before the loop is forced to stop.
 # 3-5 is a reasonable range; tune it as part of Phase 3.
@@ -145,6 +148,7 @@ async def verify_node(state: AgentState) -> dict:
             data = json.loads(content)
     except (json.JSONDecodeError, ValueError):
         # Fallback if parsing fails
+        logger.exception("verify_node failed to parse verifier response: %r", content)
         data = {"ok": False, "issue": f"Failed to parse verifier response: {content}"}
         
     return {

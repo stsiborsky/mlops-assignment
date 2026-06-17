@@ -6,10 +6,14 @@ to decide whether the answer looks plausible.
 """
 from __future__ import annotations
 
-import aiosqlite
+import logging
 from dataclasses import dataclass
 
+import aiosqlite
+
 from agent.schema import db_path
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -49,4 +53,5 @@ async def execute_sql(db_id: str, sql: str, timeout_seconds: float = 5.0) -> Exe
                 rows = await cursor.fetchall()
                 return ExecutionResult(ok=True, rows=rows, columns=cols, row_count=len(rows))
     except Exception as e:  # noqa: BLE001
+        logger.exception("execute_sql failed for db_id=%s sql=%r", db_id, sql)
         return ExecutionResult(ok=False, error=f"{type(e).__name__}: {e}")
