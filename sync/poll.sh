@@ -30,8 +30,10 @@ rsync -avz \
     --include="data/**" \
     --include="evals" \
     --include="evals/eval_set.jsonl" \
-    --include="load_test/"
+    --include="load_test" \
     --include="load_test/perf_pool.jsonl" \
+    --include="results" \
+    --include="results/**" \
     --exclude="*" \
     "${VM_USER}@${VM_IP}:${REMOTE_DIR}/" ./
 
