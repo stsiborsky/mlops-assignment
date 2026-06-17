@@ -117,6 +117,7 @@ def verify_node(state: AgentState) -> dict:
     response = llm().invoke([
         ("system", prompts.VERIFY_SYSTEM),
         ("user", prompts.VERIFY_USER.format(
+            schema=state.schema,
             question=state.question,
             sql=state.sql,
             execution=state.execution.render() if state.execution else "No execution yet",
