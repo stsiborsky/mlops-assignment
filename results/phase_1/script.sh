@@ -1,4 +1,4 @@
-curl http://195.242.29.29:8000/v1/chat/completions \
+curl http://195.242.29.176:8000/v1/chat/completions \
    -H "Content-Type: application/json" \
         -d '{
   "model": "Qwen/Qwen3-30B-A3B-Instruct-2507",

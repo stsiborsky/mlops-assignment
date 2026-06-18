@@ -31,6 +31,7 @@ rsync -avz \
     --exclude "__pycache__" \
     --exclude ".git" \
     --exclude "results" \
+    --exclude "data" \
     --exclude ".idea" \
     --exclude ".vscode" \
     ./ "${VM_USER}@${VM_IP}:${REMOTE_DIR}/"

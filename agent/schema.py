@@ -41,6 +41,7 @@ def _flatten(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+@lru_cache(maxsize=1024)
 def _read_table_descriptions(db_id: str, table: str) -> dict[str, str]:
     """Return {column_name -> one-line description} from BIRD's CSVs.
 
@@ -82,7 +83,7 @@ def _read_table_descriptions(db_id: str, table: str) -> dict[str, str]:
     return out
 
 
-@lru_cache(maxsize=32)
+@lru_cache(maxsize=128)
 def render_schema(db_id: str) -> str:
     path = db_path(db_id)
     if not path.exists():
@@ -113,10 +114,14 @@ def render_schema(db_id: str) -> str:
                 entries.append((code, descs.get(name.lower(), "")))
             for fk in conn.execute(f"PRAGMA foreign_key_list({_q(t)})"):
                 # (id, seq, ref_table, from, to, on_update, on_delete, match)
-                entries.append((
-                    f"  FOREIGN KEY ({_q(fk[3])}) REFERENCES {_q(fk[2])}({_q(fk[4])})",
-                    "",
-                ))
+                ref_from = fk[3]
+                ref_table = fk[2]
+                ref_to = fk[4]
+                if ref_to:
+                    code = f"  FOREIGN KEY ({_q(ref_from)}) REFERENCES {_q(ref_table)}({_q(ref_to)})"
+                else:
+                    code = f"  FOREIGN KEY ({_q(ref_from)}) REFERENCES {_q(ref_table)}"
+                entries.append((code, ""))
             rendered = []
             for i, (code, comment) in enumerate(entries):
                 sep = "," if i < len(entries) - 1 else ""
@@ -127,6 +132,20 @@ def render_schema(db_id: str) -> str:
             parts.append("\n".join(rendered))
             parts.append(");")
     return "\n".join(parts)
+
+
+def warmup_schema_cache() -> None:
+    """Pre-render schemas for all available DBs to avoid latency on first request."""
+    dbs = available_dbs()
+    if not dbs:
+        return
+    logger.info("Warming up schema cache for %d databases...", len(dbs))
+    for db_id in dbs:
+        try:
+            render_schema(db_id)
+        except Exception:  # noqa: BLE001
+            logger.warning("Failed to warm up schema cache for db_id=%s", db_id)
+    logger.info("Schema cache warmup complete.")
 
 
 def available_dbs() -> list[str]:

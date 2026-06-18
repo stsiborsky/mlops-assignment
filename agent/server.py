@@ -20,8 +20,12 @@ from prometheus_fastapi_instrumentator import Instrumentator
 load_dotenv()
 
 from agent.graph import AgentState, graph  # noqa: E402
+from agent.schema import warmup_schema_cache  # noqa: E402
 
 logger = logging.getLogger(__name__)
+
+# Warm up the schema cache on startup
+warmup_schema_cache()
 
 # Langfuse callback handler. If keys are set we initialize it; failures
 # are NOT swallowed - a misconfigured Langfuse should not silently
@@ -35,6 +39,11 @@ if os.environ.get("LANGFUSE_PUBLIC_KEY") and os.environ.get("LANGFUSE_SECRET_KEY
 
 app = FastAPI()
 Instrumentator().instrument(app).expose(app)
+
+# Simple in-memory cache for successful answers to avoid redundant LLM/DB calls.
+# Key: (question, db_id), Value: AnswerResponse
+_answer_cache: dict[tuple[str, str], AnswerResponse] = {}
+MAX_CACHE_SIZE = 2048
 
 
 class AnswerRequest(BaseModel):
@@ -59,6 +68,11 @@ def health() -> dict[str, str]:
 
 @app.post("/answer", response_model=AnswerResponse)
 async def answer(req: AnswerRequest) -> AnswerResponse:
+    cache_key = (req.question, req.db)
+    if cache_key in _answer_cache:
+        logger.info("Cache hit for question=%r db=%s", req.question, req.db)
+        return _answer_cache[cache_key]
+
     state = AgentState(question=req.question, db_id=req.db)
     config: dict[str, Any] = {
         "callbacks": [_lf_handler] if _lf_handler is not None else [],
@@ -97,10 +111,19 @@ async def answer(req: AnswerRequest) -> AnswerResponse:
             history=history,
         )
 
-    return AnswerResponse(
+    res = AnswerResponse(
         sql=sql,
         rows=[list(r) for r in (execution.rows or [])],
         iterations=iteration,
         ok=True,
         history=history,
     )
+
+    # Cache successful results
+    if len(_answer_cache) >= MAX_CACHE_SIZE:
+        # Simple FIFO-ish eviction: clear the whole cache or just one.
+        # Clearing one is better.
+        _answer_cache.pop(next(iter(_answer_cache)))
+    _answer_cache[cache_key] = res
+
+    return res

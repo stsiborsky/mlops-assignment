@@ -24,6 +24,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
+import asyncio
+from openai import InternalServerError
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 
@@ -78,6 +80,24 @@ def llm() -> ChatOpenAI:
     )
 
 
+async def ainvoke_with_retry(messages: list, max_retries: int = 3, initial_delay: float = 1.0) -> Any:
+    """Invoke the LLM with exponential backoff for internal server errors and timeouts."""
+    for attempt in range(max_retries):
+        try:
+            return await asyncio.wait_for(llm().ainvoke(messages), timeout=20.0)
+        except (InternalServerError, asyncio.TimeoutError) as e:
+            if attempt == max_retries - 1:
+                raise
+            delay = initial_delay * (2 ** attempt)
+            error_type = "TimeoutError" if isinstance(e, asyncio.TimeoutError) else "InternalServerError"
+            logger.warning("vLLM %s (attempt %d/%d), retrying in %.1fs: %s", 
+                           error_type, attempt + 1, max_retries, delay, e)
+            await asyncio.sleep(delay)
+        except Exception:
+            # For non-retriable errors, we might not want to retry or handle differently
+            raise
+
+
 # ---- Nodes ------------------------------------------------------------
 
 async def _attach_schema(state: AgentState) -> dict:
@@ -105,7 +125,7 @@ async def generate_sql_node(state: AgentState) -> dict:
     This node is wired and ready; fill in GENERATE_SQL_SYSTEM / GENERATE_SQL_USER
     in prompts.py to make it produce real queries.
     """
-    response = await llm().ainvoke([
+    response = await ainvoke_with_retry([
         ("system", prompts.GENERATE_SQL_SYSTEM),
         ("user", prompts.GENERATE_SQL_USER.format(
             schema=state.schema,
@@ -127,7 +147,7 @@ async def execute_node(state: AgentState) -> dict:
 
 async def verify_node(state: AgentState) -> dict:
     """Decide whether state.execution plausibly answers state.question."""
-    response = await llm().ainvoke([
+    response = await ainvoke_with_retry([
         ("system", prompts.VERIFY_SYSTEM),
         ("user", prompts.VERIFY_USER.format(
             schema=state.schema,
@@ -160,7 +180,7 @@ async def verify_node(state: AgentState) -> dict:
 
 async def revise_node(state: AgentState) -> dict:
     """Produce a revised SQL query given state.verify_issue and the prior attempt."""
-    response = await llm().ainvoke([
+    response = await ainvoke_with_retry([
         ("system", prompts.REVISE_SYSTEM),
         ("user", prompts.REVISE_USER.format(
             schema=state.schema,

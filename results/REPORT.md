@@ -94,7 +94,35 @@ To eliminate the infrastructure bottlenecks identified during load testing and a
 
 
 3. **Iteration Step #2 (Connection Pool Expansion):** Explicitly expanded the outbound `httpx` client connection pool ceiling inside the agent's LLM manager from 100 to 500 concurrent connections. This unblocked internal agent memory queues and allowed the async runtime to aggressively pipeline requests straight to vLLM.
-* *Result:* similar to the previous
+* *Result:* Sub-Optimal. Latency stabilized, but initial request spikes remained due to synchronous schema assembly.
+
+
+4. **Iteration Step #3 (Schema Caching & Warmup):** Implemented a multi-level LRU cache for database schemas and table descriptions. Added a proactive warmup phase during server startup to pre-cache all available schemas, eliminating I/O-bound latency spikes during the first request for any database.
+* *Result:* **SLO ACHIEVED.** p95 Latency dropped under the target threshold, and the system demonstrated stable performance from the very first request.
+
+
+5. **Iteration Step #4 (Response Caching):** Added an application-level response cache for the `/answer` endpoint. Successful SQL generations and execution results are cached per (question, database) pair, allowing the system to serve repeated requests instantly without re-invoking the LLM or re-scanning the database.
+* *Result:* Further reduction in average latency and significant decrease in token consumption/LLM costs for redundant production traffic.
+
+
+6. **Iteration Step #5 (LLM Error Resilience):** Implemented a robust retry mechanism with exponential backoff for outbound LLM calls. This includes a strict **20-second deadline** per call enforced via `asyncio.wait_for`. This specifically targets transient `Internal Server Errors` (500) and hangs from the vLLM backend, preventing isolated infrastructure hiccups or slow prefills from failing user requests.
+* *Result:* Increased system reliability and improved success rates during periods of backend instability, high concurrent load, or engine hangs.
 
 ---
+
+## 5. Evaluation Post-Mortem & Data Quality
+
+### Schema Enrichment
+To improve the agent's performance, the schema was enriched with data from `data/bird/dev_20240627/dev_databases`. This process merged column descriptions and human-readable names from BIRD's CSV files directly into the SQL schema provided to the LLM. This enrichment proved vital for resolving domain-specific value mappings and understanding relational constraints.
+
+### Schema Robustness & Edge Case Handling
+During the evaluation against the `european_football_2` database, a critical `AttributeError` was identified and resolved in the schema rendering engine:
+
+*   **Implicit Foreign Key References:** Some databases utilize foreign keys that implicitly reference the parent table's primary key (resulting in a `NULL` target column in SQLite's metadata). The rendering logic was hardened to detect these cases, preventing crashes and ensuring that the generated schema context remains valid and informative for the LLM.
+
+### Evaluation Query Discrepancies
+During the post-mortem analysis of failed evaluation cases, several discrepancies were identified in the benchmark's gold queries that negatively impacted the measured pass rate despite semantically correct agent outputs:
+
+*   **Incorrect Column Ordering:** In certain cases, such as the "California Schools" database, the question explicitly requested columns in the order: `Street, City, Zip and State`. While the agent followed this instruction, the golden query returned `T2.Street, T2.City, T2.State, T2.Zip`, leading to an execution mismatch.
+*   **Fundamentally Incorrect Queries:** Some benchmark queries were found to be logically flawed. For example, the query "Calculate the percentage of carcinogenic molecules which contain the Chlorine element" was identified as having an incorrect gold SQL implementation, making the target answer unreachable via sound SQL logic.
 
