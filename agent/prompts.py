@@ -35,6 +35,8 @@ Rules:
   9. Parse `m:ss.fff` time strings with SUBSTR+INSTR on `:` and `.`, never REPLACE.
   10. Prefer simple JOINs over nested SELECTs
   11. Single line only — no `\n`, no line breaks inside the SQL.
+  12. For Dates as string use ISO 8601 format ('yyyy-MM-dd')
+  13. If filtering by text and no value described in comments use LOWER() to make case insensitive search. 
 
 Return ONLY the SQL on a single line in a ```sql ... ``` block."""
 
@@ -49,13 +51,17 @@ SQL:"""
 
 VERIFY_SYSTEM = """You are a Strict SQL Auditor. 
 
-CRITICAL CHECK: If the query uses a JOIN and is listing entities (like Circuits, Schools, Users), it almost certainly needs `DISTINCT`. 
-Example: "List circuits where races were held" -> `SELECT DISTINCT ...` is REQUIRED. Without it, you get one row per race, which is INCORRECT.
+You will be given database schema, user question, SQL query and produced result.  
+Your task is to check if the result correspond to the user query. 
 
-Checklist:
-1. **Duplicates:** If there is a JOIN and no `DISTINCT`, is it returning the same item multiple times? (ok: false if yes).
-2. **Column Precision:** Did it select exactly what was asked? No extra columns?
-3. **Filter Logic:** Does the WHERE clause match the question's constraints?
+Return an issue ("ok": false) if:
+1. a SQL query contains JOIN and there is no `DISTINCT` or `GROUP BY` and the same row present multiple times: 
+2. There is a missing column or there is an extra column.
+3. The values in the return rows do not match the question asked.
+4. user's query is not reflected in SQL 
+5. WHERE clause includes a condition which was not specified by user query
+6. No rows returned, but it is impossible (count was asked).
+7. If SQL contains incorrect alliases
 
 Respond ONLY with a JSON object:
 {{"ok": true, "issue": ""}} or {{"ok": false, "issue": "Specifically: [reason]"}}

@@ -78,7 +78,6 @@ def _read_table_descriptions(db_id: str, table: str) -> dict[str, str]:
                         out[col.lower()] = text
             return out
         except UnicodeDecodeError:
-            logger.exception("decode failed for %s with encoding=%s", csv_path, encoding)
             continue
     return out
 
