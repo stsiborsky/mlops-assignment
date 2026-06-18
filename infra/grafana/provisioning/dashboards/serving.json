@@ -32,6 +32,7 @@
         { "expr": "rate(vllm:generation_tokens_total[1m])", "legendFormat": "generation" },
         { "expr": "rate(vllm:prompt_tokens_total[1m])", "legendFormat": "prompt" }
       ],
+      "fieldConfig": { "defaults": { "unit": "pps" } },
       "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
     },
     {
@@ -84,7 +85,8 @@
       "targets": [
         { "expr": "rate(vllm:num_preemptions_total[5m])", "legendFormat": "preemptions/s" },
         { "expr": "rate(vllm:request_success_total[5m])", "legendFormat": "success requests/s" }
-      ]
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps" } }
     }
   ]
 }

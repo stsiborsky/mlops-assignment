@@ -42,10 +42,18 @@ def run_sql(db_id: str, sql: str, timeout: float = 5.0) -> tuple[bool, list[tupl
 
 
 def canonicalize(rows: list[tuple] | None) -> list[tuple] | None:
-    """Sort rows; coerce cells to str; None -> ''."""
+    """Sort rows; coerce cells to str; None -> ''; normalize floats and case."""
     if rows is None:
         return None
-    return sorted(tuple("" if c is None else str(c) for c in row) for row in rows)
+    
+    def _norm(cell: Any) -> str:
+        if cell is None:
+            return ""
+        if isinstance(cell, float):
+            return f"{cell:.4f}"
+        return str(cell).strip().lower()
+
+    return sorted(tuple(_norm(c) for c in row) for row in rows)
 
 
 def matches(gold_rows: list[tuple] | None, pred_rows: list[tuple] | None) -> bool:
